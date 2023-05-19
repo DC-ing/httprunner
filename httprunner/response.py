@@ -26,22 +26,25 @@ def get_uniform_comparator(comparator: Text):
         return "not_equal"
     elif comparator in ["str_eq", "string_equals"]:
         return "string_equals"
-    elif comparator in ["len_eq", "length_equal"]:
+    elif comparator in ["len_eq", "length_equals", "length_equal"]:
         return "length_equal"
     elif comparator in [
         "len_gt",
+        "count_gt",
         "length_greater_than",
     ]:
         return "length_greater_than"
     elif comparator in [
         "len_ge",
+        "count_ge",
         "length_greater_or_equals",
     ]:
         return "length_greater_or_equals"
-    elif comparator in ["len_lt", "length_less_than"]:
+    elif comparator in ["len_lt", "count_lt", "length_less_than"]:
         return "length_less_than"
     elif comparator in [
         "len_le",
+        "count_le",
         "length_less_or_equals",
     ]:
         return "length_less_or_equals"
@@ -169,7 +172,6 @@ class ResponseObjectBase(object):
         validators: Validators,
         variables_mapping: VariablesMapping = None,
     ):
-
         variables_mapping = variables_mapping or {}
 
         self.validation_results = {}
@@ -180,7 +182,6 @@ class ResponseObjectBase(object):
         failures = []
 
         for v in validators:
-
             if "validate_extractor" not in self.validation_results:
                 self.validation_results["validate_extractor"] = []
 
@@ -282,8 +283,8 @@ class ResponseObject(ResponseObjectBase):
             "body": self.body,
         }
         if not expr.startswith(tuple(resp_obj_meta.keys())):
-            if hasattr(self.resp_obj,expr):
-                return getattr(self.resp_obj,expr)
+            if hasattr(self.resp_obj, expr):
+                return getattr(self.resp_obj, expr)
             else:
                 return expr
 
