@@ -1,0 +1,9 @@
+name: post raw text
+request:
+  method: POST
+  url: $base_url/post
+  headers:
+    Content-Type: "text/plain"
+  body: $raw_text
+validate:
+  - eq: ["status_code", 200]

@@ -8,7 +8,11 @@ from typing import List, Dict, Text, Union, Any
 from loguru import logger
 
 from httprunner import exceptions
-from httprunner.loader import load_project_meta, convert_relative_project_root_dir
+from httprunner.loader import (
+    load_project_meta,
+    convert_relative_project_root_dir,
+    load_test_file,
+)
 from httprunner.parser import parse_data
 from httprunner.utils import sort_dict_by_custom_order
 
@@ -226,7 +230,13 @@ def ensure_testcase_v4(test_content: Dict) -> Dict:
         if "request" in step:
             pass
         elif "api" in step:
-            teststep["testcase"] = step.pop("api")
+            # 将引用 的 api，覆盖到 teststep
+            api_data = load_test_file(step.pop("pop"))
+            teststep["request"] = _convert_request(api_data["request"])
+            if "validate" in api_data.keys():
+                teststep["validate"] = api_data.pop("validate")
+            if "validate" in step.keys():
+                teststep["validate"] += step.pop("validate")
         elif "testcase" in step:
             teststep["testcase"] = step.pop("testcase")
         else:
@@ -266,7 +276,6 @@ def ensure_cli_args(args: List) -> List:
 
 
 def _generate_conftest_for_summary(args: List):
-
     for arg in args:
         if os.path.exists(arg):
             test_path = arg

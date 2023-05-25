@@ -12,13 +12,6 @@
     },
     "teststeps": [
         {
-            "name": "transaction 1 start",
-            "transaction": {
-                "name": "tran1",
-                "type": "start"
-            }
-        },
-        {
             "name": "get with params",
             "request": {
                 "method": "GET",
@@ -37,12 +30,8 @@
                 "name": "get with params",
                 "varFoo2": "${max($a, $b)}"
             },
-            "setup_hooks": [
-                "${setup_hook_example($name)}"
-            ],
-            "teardown_hooks": [
-                "${teardown_hook_example($name)}"
-            ],
+            "setup_hooks": ["${setup_hook_example($name)}"],
+            "teardown_hooks": ["${teardown_hook_example($name)}"],
             "extract": {
                 "varFoo1": "body.args.foo1"
             },
@@ -77,13 +66,6 @@
                     "msg": "check args foo2"
                 }
             ]
-        },
-        {
-            "name": "transaction 1 end",
-            "transaction": {
-                "name": "tran1",
-                "type": "end"
-            }
         },
         {
             "name": "post json data",

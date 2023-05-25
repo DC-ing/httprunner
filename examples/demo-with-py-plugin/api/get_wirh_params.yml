@@ -1,0 +1,10 @@
+name: get with params
+request:
+  method: GET
+  url: $base_url/get
+  params:
+    foo1: $foo1s
+    foo2: $foo2
+    sum_v: $sum_v
+validate:
+  - eq: ["status_code", 200]

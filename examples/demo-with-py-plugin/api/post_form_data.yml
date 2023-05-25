@@ -1,0 +1,9 @@
+name: post form data
+request:
+  method: POST
+  url: $base_url/post
+  headers:
+    Content-Type: "application/x-www-form-urlencoded"
+  body: $form_data
+validate:
+  - eq: ["status_code", 200]
