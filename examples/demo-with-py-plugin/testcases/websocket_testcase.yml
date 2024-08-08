@@ -1,0 +1,98 @@
+config:
+  name: run request with WebSocket protocol
+  base_url: ws://echo.websocket.events
+  variables:
+    a: 12.3
+    b: 3.45
+    file: "data/demo_file_load_ws_message.txt"
+    n: 5
+
+teststeps:
+  - name: open connection
+    websocket:
+      type: open
+      url: "/"
+      headers:
+        User-Agent: HttpRunnerPlus
+    validate:
+      - eq: [status_code, 101]
+      - eq: [headers.connection, "Upgrade"]
+
+  - name: ping pong test
+    websocket:
+      type: ping
+      url: "/"
+      timeout: 5000
+
+  - name: read sponsor info
+    websocket:
+      type: r
+      url: "/"
+      timeout: 5000
+    validate:
+      - contains: [body, Lob.com]
+
+  - name: write json
+    websocket:
+      type: w
+      url: "/"
+      text:
+        foo1: "${gen_random_string($n)}"
+        foo2: "${max($a, $b)}"
+
+  - name: read json
+    websocket:
+      type: r
+      url: "/"
+    extract:
+      varFoo1: body.foo1
+    validate:
+      - length_equals: [body.foo1, 5]
+      - equals: [body.foo2, 12.3]
+      - string_equals: [body.foo2, "12.3"]
+
+  - name: write and read text
+    websocket:
+      type: wr
+      url: "/"
+      text: "$varFoo1"
+    validate:
+      - length_equals: [body, 5]
+
+  - name: write and read text 2
+    websocket:
+      type: wr
+      url: "/"
+      text: 33
+    validate:
+      - equals: [body, 33]
+
+  - name: write and read binary file
+    websocket:
+      type: wr
+      url: "/"
+      binary: "${load_ws_message($file)}"
+    validate:
+      - string_equals:
+          [body, "demo file used for testing load_ws_message function"]
+
+  - name: write something redundant
+    websocket:
+      type: w
+      url: "/"
+      text: have a nice day!
+
+  - name: write something redundant
+    websocket:
+      type: w
+      url: "/"
+      text: balabala ...
+
+  - name: close connection
+    websocket:
+      type: close
+      url: "/"
+      close_status: 1000
+      timeout: 30000
+    validate:
+      - eq: [status_code, 1000]

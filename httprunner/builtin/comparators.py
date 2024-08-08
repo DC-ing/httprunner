@@ -38,8 +38,12 @@ def not_equal(check_value: Any, expect_value: Any, message: Text = ""):
     assert check_value != expect_value, message
 
 
-def string_equals(check_value: Text, expect_value: Any, message: Text = ""):
-    assert str(check_value) == str(expect_value), message
+def string_equals(check_value: Any, expect_value: Any, message: Text = ""):
+    try:
+        check_value = str(check_value, encoding="utf-8")
+    except TypeError:
+        check_value = str(check_value)
+    assert check_value == str(expect_value), message
 
 
 def length_equal(check_value: Text, expect_value: int, message: Text = ""):
@@ -101,13 +105,11 @@ def type_match(check_value: Any, expect_value: Any, message: Text = ""):
     def get_type(name):
         if isinstance(name, type):
             return name
-        elif isinstance(name, str):
-            try:
-                return __builtins__[name]
-            except KeyError:
-                raise ValueError(name)
         else:
-            raise ValueError(name)
+            try:
+                return type(name)
+            except ValueError:
+                raise ValueError(name)
 
     if expect_value in ["None", "NoneType", None]:
         assert check_value is None, message

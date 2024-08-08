@@ -1,7 +1,7 @@
 from typing import Union
 
 from httprunner import HttpRunner
-from httprunner.models import StepResult, TRequest, TStep, TestCase
+from httprunner.models import StepResult, TRequest, TStep, TestCase, TWebsocketRequest
 from httprunner.step_request import (
     RequestWithOptionalArgs,
     StepRequestExtraction,
@@ -17,6 +17,11 @@ from httprunner.step_thrift_request import (
     RunThriftRequest,
     StepThriftRequestExtraction,
     StepThriftRequestValidation,
+)
+from httprunner.step_websocket_request import (
+    RunWebsocketRequest,
+    StepWebsocketRequestExtraction,
+    StepWebsocketRequestValidation,
 )
 
 
@@ -34,6 +39,9 @@ class Step(object):
             RunThriftRequest,
             StepThriftRequestValidation,
             StepThriftRequestExtraction,
+            RunWebsocketRequest,
+            StepWebsocketRequestValidation,
+            StepWebsocketRequestExtraction,
         ],
     ):
         self.__step = step
@@ -45,6 +53,10 @@ class Step(object):
     @property
     def testcase(self) -> TestCase:
         return self.__step.struct().testcase
+
+    @property
+    def websocket_request(self) -> TWebsocketRequest:
+        return self.__step.struct().websocket_request
 
     @property
     def retry_times(self) -> int:

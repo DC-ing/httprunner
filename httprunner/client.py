@@ -36,7 +36,7 @@ def get_req_resp_record(resp_obj: Response) -> ReqRespData:
                 value = json.dumps(value, indent=4, ensure_ascii=False)
 
             msg += "{:<8} : {}\n".format(key, value)
-        logger.debug(msg)
+        # logger.debug(msg)
 
     # record actual request info
     request_headers = dict(resp_obj.request.headers)

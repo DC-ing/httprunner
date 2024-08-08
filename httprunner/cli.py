@@ -10,6 +10,7 @@ from httprunner import __description__, __version__
 from httprunner.compat import ensure_cli_args
 from httprunner.make import init_make_parser, main_make
 from httprunner.utils import ga4_client, init_logger, init_sentry_sdk
+from httprunner.scaffold import init_parser_scaffold, main_scaffold
 
 init_sentry_sdk()
 
@@ -63,6 +64,7 @@ def main():
 
     subparsers = parser.add_subparsers(help="sub-command help")
     init_parser_run(subparsers)
+    sub_parser_scaffold = init_parser_scaffold(subparsers)
     sub_parser_make = init_make_parser(subparsers)
 
     if len(sys.argv) == 1:
@@ -77,6 +79,9 @@ def main():
         elif sys.argv[1] in ["-h", "--help"]:
             # httprunner -h
             parser.print_help()
+        elif sys.argv[1] == "startproject":
+            # httprunner startproject
+            sub_parser_scaffold.print_help()
         elif sys.argv[1] == "run":
             # httprunner run
             pytest.main(["-h"])
@@ -118,6 +123,8 @@ def main():
         sys.exit(main_run(extra_args))
     elif sys.argv[1] == "make":
         main_make(args.testcase_path)
+    elif sys.argv[1] == "startproject":
+        main_scaffold(args)
 
 
 def main_hrun_alias():

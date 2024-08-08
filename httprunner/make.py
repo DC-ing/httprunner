@@ -1,4 +1,5 @@
 import os
+import platform
 import string
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from httprunner.loader import (
     load_test_file,
     load_testcase,
 )
+from httprunner.step_websocket_request import ensure_websocket_method_type
 from httprunner.response import uniform_validator
 from httprunner.utils import ga4_client, is_support_multiprocessing
 
@@ -39,14 +41,18 @@ __TEMPLATE__ = jinja2.Template(
 {%- if parameters or skip %}
 import pytest
 {% endif %}
-from httprunner import HttpRunner, Config, Step, RunRequest
+from httprunner import HttpRunner, Config, Step
 
 {%- if parameters %}
 from httprunner import Parameters
 {%- endif %}
 
-{%- if reference_testcase %}
-from httprunner import RunTestCase
+{%- if run_types %}
+from httprunner import (
+    {% for run_type in run_types %}
+    {{ run_type }},
+    {% endfor %}
+)
 {%- endif %}
 
 {%- for import_str in imports_list %}
@@ -177,9 +183,23 @@ def convert_testcase_path(testcase_abs_path: Text) -> Tuple[Text, Text]:
 
 def format_pytest_with_black(*python_paths: Text):
     logger.info("format pytest cases with black ...")
+    path_max_len = 100
     try:
-        if is_support_multiprocessing() or len(python_paths) <= 1:
-            subprocess.run(["black", *python_paths])
+        python_paths_len = len(python_paths)
+        if is_support_multiprocessing() or python_paths_len <= 1:
+            # fix: The filename or extension is too long in Windows
+            if platform.platform().lower().startswith("windows"):
+                logger.info(f"every time format {path_max_len} files in windows")
+                for i in range(0, int(python_paths_len / path_max_len) + 1):
+                    min_index = i * path_max_len
+                    max_index = (
+                        python_paths_len
+                        if i == int(python_paths_len / path_max_len)
+                        else (i + 1) * path_max_len
+                    )
+                    subprocess.run(["black", *python_paths[min_index:max_index]])
+            else:
+                subprocess.run(["black", *python_paths])
         else:
             logger.warning(
                 "this system does not support multiprocessing well, format files one by one ..."
@@ -218,12 +238,11 @@ def make_config_chain_style(config: Dict) -> Text:
 
 
 def make_config_skip(config: Dict) -> Text:
+    config_chain_style = None
     if "skip" in config:
         if config["skip"]:
-            config_chain_style = config["skip"]
-        else:
-            config_chain_style = '"skip unconditionally"'
-        return config_chain_style
+            config_chain_style = f'"{config["skip"]}"'
+    return config_chain_style
 
 
 def make_request_chain_style(request: Dict) -> Text:
@@ -274,11 +293,44 @@ def make_request_chain_style(request: Dict) -> Text:
     return request_chain_style
 
 
+def make_websocket_request_chain_style(websocket_request: Dict) -> Text:
+    method_type = websocket_request["type"].lower()
+    method = ensure_websocket_method_type(method_type)
+    url = websocket_request["url"]
+    websocket_request_chain_style = f'.{method}("{url}")'
+
+    if "headers" in websocket_request:
+        headers = websocket_request["headers"]
+        websocket_request_chain_style += f".with_headers(**{headers})"
+
+    if "timeout" in websocket_request:
+        timeout = websocket_request["timeout"]
+        websocket_request_chain_style += f".with_timeout({timeout})"
+
+    if "text" in websocket_request:
+        req_text = websocket_request["text"]
+        if isinstance(req_text, Text):
+            req_text = f'"{req_text}"'
+        websocket_request_chain_style += f".with_text({req_text})"
+
+    if "binary" in websocket_request:
+        binary = websocket_request["binary"]
+        websocket_request_chain_style += f'.with_binary("{binary}")'
+
+    if "close_status" in websocket_request:
+        close_status = websocket_request["close_status"]
+        websocket_request_chain_style += f".with_close_status({close_status})"
+
+    return websocket_request_chain_style
+
+
 def make_teststep_chain_style(teststep: Dict) -> Text:
     if teststep.get("request"):
         step_info = f'RunRequest("{teststep["name"]}")'
     elif teststep.get("testcase"):
         step_info = f'RunTestCase("{teststep["name"]}")'
+    elif teststep.get("websocket"):
+        step_info = f'RunWebsocketRequest("{teststep["name"]}")'
     else:
         raise exceptions.TestCaseFormatError(f"Invalid teststep: {teststep}")
 
@@ -303,6 +355,9 @@ def make_teststep_chain_style(teststep: Dict) -> Text:
         testcase = teststep["testcase"]
         call_ref_testcase = f".call({testcase})"
         step_info += call_ref_testcase
+    elif teststep.get("websocket"):
+        # TODO 后续需要支持 websocket 继承
+        step_info += make_websocket_request_chain_style(teststep["websocket"])
 
     if "teardown_hooks" in teststep:
         teardown_hooks = teststep["teardown_hooks"]
@@ -319,7 +374,10 @@ def make_teststep_chain_style(teststep: Dict) -> Text:
         # request step
         step_info += ".extract()"
         for extract_name, extract_path in teststep["extract"].items():
-            step_info += f""".with_jmespath('{extract_path}', '{extract_name}')"""
+            if "'" in extract_path:
+                step_info += f""".with_jmespath("{extract_path}", "{extract_name}")"""
+            else:
+                step_info += f""".with_jmespath('{extract_path}', '{extract_name}')"""
 
     if "export" in teststep:
         # reference testcase step
@@ -383,8 +441,16 @@ def make_testcase(testcase: Dict, dir_path: Text = None) -> Text:
     # prepare reference testcase
     imports_list = []
     teststeps = testcase["teststeps"]
+    run_types = set()
     for teststep in teststeps:
-        if not teststep.get("testcase"):
+        # confirm testcase types, such as: request、testcase、websocket ...
+        if teststep.get("request"):
+            run_types.add("RunRequest")
+        if teststep.get("websocket"):
+            run_types.add("RunWebsocketRequest")
+        if teststep.get("testcase"):
+            run_types.add("RunTestCase")
+        else:
             continue
 
         # make ref testcase pytest file
@@ -441,6 +507,7 @@ sys.path.insert(0, str(Path(__file__){parent}))
         "testcase_path": testcase_path,
         "class_name": f"TestCase{testcase_cls_name}",
         "imports_list": imports_list,
+        "run_types": sorted(run_types),
         "config_chain_style": make_config_chain_style(config),
         "skip": make_config_skip(config),
         "parameters": config.get("parameters"),

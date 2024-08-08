@@ -1,0 +1,8 @@
+name: upload keyword api
+request:
+  url: $base_url/post
+  method: POST
+  upload:
+    file: "test.env"
+validate:
+  - eq: ["status_code", 200]

@@ -179,7 +179,9 @@ def run_step_sql_request(runner: HttpRunner, step: TStep) -> StepResult:
         step_result.success = True
     except ValidationFailure:
         log_sql_req_resp_details()
-        raise
+        step_result.success = False
+        step_result.failure_info = resp_obj.failures_string
+        # raise
     finally:
         session_data = runner.session.data
         session_data.success = step_result.success
@@ -188,7 +190,7 @@ def run_step_sql_request(runner: HttpRunner, step: TStep) -> StepResult:
         # save step data
         step_result.data = session_data
         step_result.elapsed = time.time() - start_time
-    return step_result
+        return step_result
 
 
 class StepSqlRequestValidation(StepRequestValidation):

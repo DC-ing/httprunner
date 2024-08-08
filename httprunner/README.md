@@ -31,8 +31,9 @@ class IStep(object):
 
 我们只需遵循 `IStep` 的接口定义，即可实现各种类型的测试步骤类型。当前 python 版本已支持的步骤类型包括：
 
-- [request](step_request.py)：发起单次 HTTP 请求
+- [request](step_request.py)：发起单次 HTTP 请求，支持 api 引用
 - [testcase](step_testcase.py)：引用执行其它测试用例文件
+- [websocket](step_websocket_request.py)：发起 websocket 接口请求
 
 基于该机制，我们可以扩展支持新的协议类型，例如 HTTP2/WebSocket/RPC 等；同时也可以支持新的测试类型，例如 UI 自动化。甚至我们还可以在一个测试用例中混合调用多种不同的 Step 类型，例如实现 HTTP/RPC/UI 混合场景。
 
@@ -77,6 +78,7 @@ class TestCaseRequestWithFunctions(HttpRunner):
 
 - [request_with_functions_test.py](../examples/postman_echo/request_methods/request_with_functions_test.py)：用例中包含了 requests 的情况
 - [request_with_testcase_reference_test.py](../examples/postman_echo/request_methods/request_with_testcase_reference_test.py)：用例中包含了引用其它测试用例的情况
+- [websocket_test.py](../examples/demo_with_py_plugin/testcases/websocket_test.py)：用例包含了 websocket 的情况
 
 ### 用例执行器 SessionRunner
 
@@ -84,7 +86,7 @@ class TestCaseRequestWithFunctions(HttpRunner):
 
 ```py
 class SessionRunner(object):
-	config: Config
+ config: Config
     teststeps: List[object]     # list of Step
     ...
 ```
@@ -93,7 +95,7 @@ class SessionRunner(object):
 
 - test_start：该方法将被 pytest 发现，作为启动执行入口，依次执行所有测试步骤
 
-```go
+```py
 def test_start(self, param: Dict = None) -> "SessionRunner":
     """main entrance, discovered by pytest"""
     self.__start_at = time.time()

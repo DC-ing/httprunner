@@ -102,9 +102,9 @@ def run_step_request(runner: HttpRunner, step: TStep) -> StepResult:
     request_headers = {
         key: request_headers[key] for key in request_headers if not key.startswith(":")
     }
-    request_headers[
-        "HRUN-Request-ID"
-    ] = f"HRUN-{runner.case_id}-{str(int(time.time() * 1000))[-6:]}"
+    request_headers["HRUN-Request-ID"] = (
+        f"HRUN-{runner.case_id}-{str(int(time.time() * 1000))[-6:]}"
+    )
     parsed_request_dict["headers"] = request_headers
 
     step_variables["request"] = parsed_request_dict
@@ -175,8 +175,12 @@ def run_step_request(runner: HttpRunner, step: TStep) -> StepResult:
     try:
         resp_obj.validate(validators, variables_mapping)
         step_result.success = True
-    except ValidationFailure:
-        raise
+    except Exception as vf:
+        # 不用 ValidationFailure，会有其他 异常
+        # validate failed, test failed
+        step_result.success = False
+        step_result.failure_info = vf
+        # raise
     finally:
         session_data = runner.session.data
         session_data.success = step_result.success
@@ -186,7 +190,7 @@ def run_step_request(runner: HttpRunner, step: TStep) -> StepResult:
         step_result.data = session_data
         step_result.elapsed = time.time() - start_time
 
-    return step_result
+        return step_result
 
 
 class StepRequestValidation(IStep):
@@ -344,7 +348,7 @@ class StepRequestValidation(IStep):
     def type(self) -> Text:
         return f"request-{self.__step.request.method}"
 
-    def run(self, runner: HttpRunner):
+    def run(self, runner: HttpRunner) -> StepResult:
         return run_step_request(runner, self.__step)
 
 
@@ -376,7 +380,7 @@ class StepRequestExtraction(IStep):
     def type(self) -> Text:
         return f"request-{self.__step.request.method}"
 
-    def run(self, runner: HttpRunner):
+    def run(self, runner: HttpRunner) -> StepResult:
         return run_step_request(runner, self.__step)
 
 
@@ -445,7 +449,7 @@ class RequestWithOptionalArgs(IStep):
     def type(self) -> Text:
         return f"request-{self.__step.request.method}"
 
-    def run(self, runner: HttpRunner):
+    def run(self, runner: HttpRunner) -> StepResult:
         return run_step_request(runner, self.__step)
 
 

@@ -1,5 +1,6 @@
 import collections
 import copy
+import datetime
 import itertools
 import json
 import os
@@ -255,6 +256,34 @@ def omit_long_data(body, omit_len=512):
         appendix_str = appendix_str.encode("utf-8")
 
     return omitted_body + appendix_str
+
+
+def get_platform():
+    return {
+        "httprunner_version": __version__,
+        "python_version": "{} {}".format(
+            platform.python_implementation(), platform.python_version()
+        ),
+        "platform": platform.platform(),
+    }
+
+
+def time_stamp_to_time_str(time_stamp, format_str=r"%Y/%m/%d %H:%M:%S") -> str:
+    """Converts a timestamp to a formatted time
+
+    Args:
+        time_stamp (int): timestamp. If it is a millisecond timestamp, it will convert the second timestamp
+        format_str (str, optional): formatted time string. Defaults to r"%Y/%m/%d %H:%M:%S".
+
+    Returns:
+        str: formatted time
+    """
+    # If it is a millisecond timestamp, it will convert the second timestamp
+    if time_stamp > 2000000000:
+        time_stamp = time_stamp / 1000.0
+    src_time = datetime.datetime.fromtimestamp(time_stamp)
+    time_str = datetime.datetime.strftime(src_time, format_str)
+    return time_str
 
 
 def sort_dict_by_custom_order(raw_dict: Dict, custom_order: List):

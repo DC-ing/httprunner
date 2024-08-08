@@ -1,4 +1,6 @@
+import colorama
 import os
+import sys
 import time
 import uuid
 from datetime import datetime
@@ -40,6 +42,7 @@ class SessionRunner(object):
     root_dir: Text = ""
     thrift_client = None
     db_engine = None
+    websocket_client = None
 
     __config: TConfig
     __project_meta: ProjectMeta = None
@@ -70,6 +73,7 @@ class SessionRunner(object):
         self.__step_results = self.__step_results or []
         self.session = self.session or HttpSession()
         self.parser = self.parser or Parser(self.__project_meta.functions)
+        self.config_vars = {}
 
     def with_session(self, session: HttpSession) -> "SessionRunner":
         self.session = session
@@ -102,12 +106,17 @@ class SessionRunner(object):
         self.db_engine = db_engine
         return self
 
+    def with_websocket_client(self, websocket_client) -> "SessionRunner":
+        self.websocket_client = websocket_client
+        return self
+
     def __parse_config(self, param: Dict = None) -> None:
         # parse config variables
         self.__config.variables.update(self.__session_variables)
         if param:
             self.__config.variables.update(param)
         self.__config.variables = self.parser.parse_variables(self.__config.variables)
+        self.config_vars = self.__config.variables
 
         # parse config name
         self.__config.name = self.parser.parse_data(
@@ -143,6 +152,9 @@ class SessionRunner(object):
             if not step_result.success:
                 summary_success = False
                 break
+        # testcase has no step result，summary is False
+        if len(self.__step_results) == 0:
+            summary_success = False
 
         return TestCaseSummary(
             name=self.__config.name,
@@ -154,7 +166,7 @@ class SessionRunner(object):
                 duration=self.__duration,
             ),
             in_out=TestCaseInOut(
-                config_vars=self.__config.variables,
+                config_vars=self.config_vars,
                 export_vars=self.get_export_variables(),
             ),
             log=self.__log_path,
@@ -178,13 +190,15 @@ class SessionRunner(object):
             step (Step): teststep
 
         """
-        logger.info(f"run step begin: {step.name()} >>>>>>")
+        step_name = self.parser.parse_string(step.name(), self.merge_step_variables({}))
+        # TODO 能正常解析就使用正常的步骤名称，不然直接使用原步骤名称
+        logger.info(f"run step begin: {step_name} >>>>>>")
 
         # run step
         for i in range(step.retry_times + 1):
             try:
                 if ALLURE is not None:
-                    with ALLURE.step(f"step: {step.name()}"):
+                    with ALLURE.step(f"step: {step_name}"):
                         step_result: StepResult = step.run(self)
                 else:
                     step_result: StepResult = step.run(self)
@@ -194,11 +208,11 @@ class SessionRunner(object):
                     raise
                 else:
                     logger.warning(
-                        f"run step {step.name()} validation failed,wait {step.retry_interval} sec and try again"
+                        f"run step {step_name} validation failed,wait {step.retry_interval} sec and try again"
                     )
                     time.sleep(step.retry_interval)
                     logger.info(
-                        f"run step retry ({i + 1}/{step.retry_times} time): {step.name()} >>>>>>"
+                        f"run step retry ({i + 1}/{step.retry_times} time): {step_name} >>>>>>"
                     )
 
         # save extracted variables to session variables
@@ -206,7 +220,8 @@ class SessionRunner(object):
         # update testcase summary
         self.__step_results.append(step_result)
 
-        logger.info(f"run step end: {step.name()} <<<<<<\n")
+        logger.info(f"run step end: {step_name} <<<<<<\n")
+        return step_result
 
     def test_start(self, param: Dict = None) -> "SessionRunner":
         """main entrance, discovered by pytest"""
@@ -214,6 +229,31 @@ class SessionRunner(object):
         print("\n")
         self.__init()
         self.__parse_config(param)
+
+        # fix 句柄无效 in windows
+        def setup_ansi_colors(suppress_colors):
+            convert_ansi_codes_to_win32_calls = False
+            if os.name == "nt":
+                # Only need to init colorama with 'convert=True' when app is called
+                # from 'cmd.exe', 'powershell' or 'git-bash via VS Code'
+                convert_ansi_codes_to_win32_calls = (
+                    "TERM" not in os.environ
+                    or os.environ.get("TERM_PROGRAM", None) == "vscode"
+                )
+
+            if "CONVERT_ANSI_CODES_TO_WIN32_CALLS" in os.environ:
+                # explicit option is useful for cases when automatic guess fails (e.g. for Eclipse IDE)
+                convert_ansi_codes_to_win32_calls = os.environ.get(
+                    "CONVERT_ANSI_CODES_TO_WIN32_CALLS"
+                ).lower() in ("true", "1")
+
+            colorama.init(
+                strip=suppress_colors, convert=convert_ansi_codes_to_win32_calls
+            )
+
+        setup_ansi_colors(suppress_colors=False)
+        logger.remove()
+        logger.add(sink=sys.stdout.write, colorize=True)
 
         if ALLURE is not None and not self.__is_referenced:
             # update allure report meta
@@ -224,12 +264,16 @@ class SessionRunner(object):
             f"Start to run testcase: {self.__config.name}, TestCase ID: {self.case_id}"
         )
 
-        logger.add(self.__log_path, format=LOGGER_FORMAT, level="DEBUG")
+        logger.add(
+            self.__log_path, format=LOGGER_FORMAT, level="DEBUG", encoding="utf-8"
+        )
         self.__start_at = time.time()
         try:
             # run step in sequential order
             for step in self.teststeps:
-                self.__run_step(step)
+                step_result = self.__run_step(step)
+                if step_result.failure_info != "":
+                    raise ValidationFailure(step_result.failure_info)
         finally:
             logger.info(f"generate testcase log: {self.__log_path}")
             if ALLURE is not None:

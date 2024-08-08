@@ -18,7 +18,11 @@ from httprunner.step_thrift_request import (
     StepThriftRequestExtraction,
     StepThriftRequestValidation,
 )
-
+from httprunner.step_websocket_request import (
+    RunWebsocketRequest,
+    StepWebsocketRequestExtraction,
+    StepWebsocketRequestValidation,
+)
 
 __all__ = [
     "__version__",
@@ -35,4 +39,7 @@ __all__ = [
     "RunThriftRequest",
     "StepThriftRequestValidation",
     "StepThriftRequestExtraction",
+    "RunWebsocketRequest",
+    "StepWebsocketRequestExtraction",
+    "StepWebsocketRequestValidation",
 ]

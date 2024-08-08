@@ -26,7 +26,7 @@ def get_uniform_comparator(comparator: Text):
         return "not_equal"
     elif comparator in ["str_eq", "string_equals"]:
         return "string_equals"
-    elif comparator in ["len_eq", "length_equal"]:
+    elif comparator in ["len_eq", "length_equal", "length_equals"]:
         return "length_equal"
     elif comparator in [
         "len_gt",
@@ -131,6 +131,7 @@ class ResponseObjectBase(object):
         self.resp_obj = resp_obj
         self.parser = parser
         self.validation_results: Dict = {}
+        self.failures_string = ""
 
     def extract(
         self,
@@ -173,6 +174,7 @@ class ResponseObjectBase(object):
         variables_mapping = variables_mapping or {}
 
         self.validation_results = {}
+        self.failures_string = ""
         if not validators:
             return
 
@@ -250,8 +252,8 @@ class ResponseObjectBase(object):
             self.validation_results["validate_extractor"].append(validator_dict)
 
         if not validate_pass:
-            failures_string = "\n".join([failure for failure in failures])
-            raise ValidationFailure(failures_string)
+            self.failures_string = "\n".join([failure for failure in failures])
+            raise ValidationFailure(self.failures_string)
 
 
 class ResponseObject(ResponseObjectBase):
@@ -307,3 +309,30 @@ class ThriftResponseObject(ResponseObjectBase):
 
 class SqlResponseObject(ResponseObjectBase):
     pass
+
+
+class WebsocketResponseObject(ResponseObjectBase):
+    def _search_jmespath(self, expr: Text) -> Any:
+        resp_obj_meta = {
+            "status_code": self.resp_obj.status_code,
+            "headers": self.resp_obj.client.headers,
+            "body": self.resp_obj.text,
+        }
+        if not expr.startswith(tuple(resp_obj_meta.keys())):
+            if hasattr(self.resp_obj, expr):
+                return getattr(self.resp_obj, expr)
+            else:
+                return expr
+
+        try:
+            check_value = jmespath.search(expr, resp_obj_meta)
+        except JMESPathError as ex:
+            logger.error(
+                f"failed to search with jmespath\n"
+                f"expression: {expr}\n"
+                f"data: {resp_obj_meta}\n"
+                f"exception: {ex}"
+            )
+            raise
+
+        return check_value

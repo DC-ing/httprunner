@@ -1,0 +1,11 @@
+config:
+  name: test upload file with httpbin
+  variables:
+    test_file: data/test.env
+    base_url: "https://httpbin.org"
+
+teststeps:
+  - name: upload file with keyword
+    api: api/upload_keyword.yml
+    validate:
+      - startswith: ["body.form.file", "test"]

@@ -1,6 +1,7 @@
 """
 This module handles compatibility issues between testcase format v2, v3 and v4.
 """
+
 import os
 import sys
 from typing import List, Dict, Text, Union, Any
@@ -8,7 +9,11 @@ from typing import List, Dict, Text, Union, Any
 from loguru import logger
 
 from httprunner import exceptions
-from httprunner.loader import load_project_meta, convert_relative_project_root_dir
+from httprunner.loader import (
+    load_project_meta,
+    convert_relative_project_root_dir,
+    load_test_file,
+)
 from httprunner.parser import parse_data
 from httprunner.utils import sort_dict_by_custom_order
 
@@ -33,6 +38,7 @@ def convert_variables(
 
 
 def _convert_request(request: Dict) -> Dict:
+    request["method"] = request["method"].upper()
     if "body" in request:
         content_type = ""
         if "headers" in request and "Content-Type" in request["headers"]:
@@ -115,12 +121,15 @@ def _convert_validators(validators: List) -> List:
 def _sort_request_by_custom_order(request: Dict) -> Dict:
     custom_order = [
         "method",
+        "type",
         "url",
         "params",
         "headers",
         "cookies",
         "data",
         "json",
+        "text",
+        "binary",
         "files",
         "timeout",
         "allow_redirects",
@@ -137,8 +146,10 @@ def _sort_step_by_custom_order(step: Dict) -> Dict:
     custom_order = [
         "name",
         "variables",
+        "api",
         "request",
         "testcase",
+        "websocket",
         "setup_hooks",
         "teardown_hooks",
         "extract",
@@ -226,9 +237,22 @@ def ensure_testcase_v4(test_content: Dict) -> Dict:
         if "request" in step:
             pass
         elif "api" in step:
-            teststep["testcase"] = step.pop("api")
+            # 将 引用 api 内容，添加到 teststep
+            api_data = load_test_file(step.pop("api"))
+            teststep["request"] = _convert_request(api_data["request"])
+            # validate 是可选参数
+            # api 和 teststep 断言重复，会断言 2 次
+            if "validate" in api_data:
+                teststep["validate"] = api_data.pop("validate")
+            if "validate" in step:
+                if "validate" in teststep:
+                    teststep["validate"] += step.pop("validate")
+                else:
+                    teststep["validate"] = step.pop("validate")
         elif "testcase" in step:
             teststep["testcase"] = step.pop("testcase")
+        elif "websocket" in step:
+            teststep["websocket"] = step.pop("websocket")
         else:
             raise exceptions.TestCaseFormatError(f"Invalid teststep: {step}")
 
@@ -261,8 +285,23 @@ def ensure_cli_args(args: List) -> List:
         )
         args.pop(args.index("--save-tests"))
         _generate_conftest_for_summary(args)
-
+    else:
+        _delete_conftest(args)
     return args
+
+
+def _delete_conftest(args: List):
+    test_path = None
+    for arg in args:
+        if os.path.exists(arg):
+            test_path = arg
+            # FIXME: several test paths maybe specified
+            break
+    project_meta = load_project_meta(test_path)
+    project_root_dir = project_meta.RootDir
+    conftest_path = os.path.join(project_root_dir, "conftest.py")
+    if os.path.exists(conftest_path):
+        os.remove(conftest_path)
 
 
 def _generate_conftest_for_summary(args: List):
@@ -284,7 +323,9 @@ import time
 import pytest
 from loguru import logger
 
-from httprunner.utils import get_platform, ExtendJSONEncoder
+from httprunner.exceptions import EnvNotFound
+from httprunner.ext.report.notification import MeixinNotification
+from httprunner.utils import get_platform, get_os_environ, ExtendJSONEncoder, time_stamp_to_time_str
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -340,6 +381,43 @@ def session_fixture(request):
 
     logger.info(f"generated task summary: {summary_path}")
 
+
+def pytest_terminal_summary(terminalreporter):
+    total = terminalreporter._numcollected
+    passed = len(
+        [i for i in terminalreporter.stats.get("passed", []) if i.when != "teardown"]
+    )
+    failed = len(
+        [i for i in terminalreporter.stats.get("failed", []) if i.when != "teardown"]
+    )
+    error = len(
+        [i for i in terminalreporter.stats.get("error", []) if i.when != "teardown"]
+    )
+    skipped = len(
+        [i for i in terminalreporter.stats.get("skipped", []) if i.when != "teardown"]
+    )
+    pass_rate = (passed + skipped) / terminalreporter._numcollected
+
+    start_time = terminalreporter._sessionstarttime
+    duration = time.time() - start_time
+
+    # 进行消息推送，暂定运行成功后都推送
+    
+    message = f"""
+执行时间：{time_stamp_to_time_str(start_time)}
+执行时长：{round(duration, 2)} s
+
+总用例数：{total}
+成功数：{passed}
+失败数：{failed}
+错误数：{error}
+跳过数：{skipped}"""
+    try:
+        send_url = get_os_environ("send_url")
+        webhook = get_os_environ("webhook")
+        MeixinNotification(send_url, webhook).send_msg(message)
+    except EnvNotFound:
+        logger.warning("请在项目上的[.env]文件上添加send_url 和 webhook，以便可以进行美信消息推送")
 '''
 
     project_meta = load_project_meta(test_path)

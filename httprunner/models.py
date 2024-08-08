@@ -114,6 +114,28 @@ class TSqlRequest(BaseModel):
     size: int = 0  # limit nums of sql result
 
 
+class WebsocketMethodEnum(Text, Enum):
+    OPEN = "open"
+    PING = "ping"
+    WR = "wr"
+    W = "w"
+    R = "r"
+    CLOSE = "close"
+
+
+class TWebsocketRequest(BaseModel):
+    # wait write
+    url: Url = ""
+    type: WebsocketMethodEnum = ""
+    params: Dict = {}
+    headers: Headers = {}
+    new_connection: bool = False
+    text: Union[Text, Dict[Text, Any]] = None
+    binary: Any = None
+    timeout: int = None
+    close_status: int = None
+
+
 class TConfig(BaseModel):
     name: Name
     verify: Verify = False
@@ -163,6 +185,7 @@ class TStep(BaseModel):
     retry_interval: int = 0  # sec
     thrift_request: Union[TThriftRequest, None] = None
     sql_request: Union[TSqlRequest, None] = None
+    websocket_request: Union[TWebsocketRequest, None] = None
 
 
 class TestCase(BaseModel):
@@ -255,6 +278,7 @@ class StepResult(BaseModel):
     content_size: float = 0  # response content size
     export_vars: VariablesMapping = {}
     attachment: Text = ""  # teststep attachment
+    failure_info: Text = ""  # teststep failure info
 
 
 StepResult.update_forward_refs()
